@@ -13,7 +13,7 @@ class PAM(nn.Module):
         super().__init__()
         self.signlRep = SignlRep(dim, dim, bias=bias, norm=norm_layer)
         self.norm = nn.InstanceNorm2d(dim, affine=True)
-        self.mlp = Mlp(in_features=dim, hidden_features=int(dim * 2), act_layer=act_layer)
+        self.mlp = Mlp(in_ch=dim, hidden_ch=int(dim * 2),out_ch=dim, act_layer=act_layer)
 
     def forward(self, x):
         x = x + self.signlRep(x)
@@ -69,14 +69,12 @@ class SignlRep(nn.Module):
         return x
 
 class Mlp(nn.Module):
-    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.PReLU):
+    def __init__(self, in_ch, hidden_ch, out_ch, act_layer=nn.PReLU):
         super().__init__()
 
-        out_features = out_features or in_features
-        hidden_features = hidden_features or in_features
         self.act = act_layer()
-        self.fc1 = nn.Conv2d(in_features, hidden_features, 1, 1)
-        self.fc2 = nn.Conv2d(hidden_features, out_features, 1, 1)
+        self.fc1 = nn.Conv2d(in_ch, hidden_ch, 1, 1)
+        self.fc2 = nn.Conv2d(hidden_ch, out_ch, 1, 1)
 
     def forward(self, x):
         x = self.fc1(x)
@@ -122,7 +120,7 @@ class CAM(nn.Module):
         rbg = torch.cat((out_r, out_g, out_b, base), dim=1)
 
         return rbg
-
+    
 class DRB(nn.Module):
     def __init__(self, in_channels):
         super(DRB, self).__init__()
@@ -176,9 +174,9 @@ class HDNet(nn.Module):
 
         self.channel = channel
         self.out_nc = out_nc
-        self.cam1 = CAM(channel, channel * 2)
-        self.cam2 = CAM(channel, channel * 2)
-        self.pam = nn.Sequential(PAM(channel))
+        self.cam1 = CAM(channel, channel * 2)  
+        self.cam2 = CAM(channel, channel * 2) 
+        self.pam = nn.Sequential(PAM(channel))   
 
         self.conv1 = nn.Conv2d(in_nc, channel, 1, 1, bias=True)
         self.conv2 = nn.Conv2d(channel, channel, 1, 1, bias=True)
@@ -202,7 +200,7 @@ class HDNet(nn.Module):
 
         mid_out = self.conv4(mid)
 
-        fuse2=self.fuse2(mid)
+        fuse2=self.fuse2(mid) 
 
         cam2 = self.cam2(fuse2)
 
