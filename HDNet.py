@@ -8,12 +8,12 @@ import torch.nn.functional as F
 
 class PAM(nn.Module):
 
-    def __init__(self, dim=16, bias=False
+    def __init__(self, ch=16, bias=False
                 , act_layer=nn.PReLU, norm_layer=nn.InstanceNorm2d):
         super().__init__()
-        self.signlRep = SignlRep(dim, dim, bias=bias, norm=norm_layer)
-        self.norm = nn.InstanceNorm2d(dim, affine=True)
-        self.mlp = Mlp(in_ch=dim, hidden_ch=int(dim * 2),out_ch=dim, act_layer=act_layer)
+        self.signlRep = SignlRep(ch, ch, bias=bias, norm=norm_layer)
+        self.norm = nn.InstanceNorm2d(ch, affine=True)
+        self.mlp = Mlp(in_ch=ch, mid_ch=int(ch * 2),out_ch=ch, act_layer=act_layer)
 
     def forward(self, x):
         x = x + self.signlRep(x)
@@ -21,9 +21,9 @@ class PAM(nn.Module):
         return x
 
 class Weight_fuse(nn.Module):
-    def __init__(self,dim):
+    def __init__(self,ch):
         super().__init__()
-        self.fc = Mlp(dim, dim // 4, dim * 2)
+        self.fc = Mlp(ch, ch // 4, ch * 2)
 
     def forward(self, x):
         bs, c, _, _ =x[0].size()
@@ -37,30 +37,30 @@ class Weight_fuse(nn.Module):
 
 
 class SignlRep(nn.Module):
-    def __init__(self, in_dim, out_dim, bias=False, norm=nn.InstanceNorm2d):
+    def __init__(self, in_ch, out_ch, bias=False, norm=nn.InstanceNorm2d):
         super().__init__()
-        self.norm = norm(in_dim,affine=True)
+        self.norm = norm(in_ch,affine=True)
         self.fcs = nn.ModuleList([])
         for i in range(9):
-            self.fcs.append(nn.Conv2d(in_dim, out_dim, kernel_size=1, stride=1, padding=0, bias=bias))
-        self.f5 = nn.Conv2d(in_dim, out_dim, kernel_size=5, stride=1, padding=5 // 2, groups=out_dim // 4, bias=bias)
-        self.f7 = nn.Conv2d(in_dim, out_dim, kernel_size=7, stride=1, padding=7 // 2, groups=out_dim // 2, bias=bias)
-        self.f9 = nn.Conv2d(in_dim, out_dim, kernel_size=9, stride=1, padding=9 // 2, groups=out_dim, bias=bias)
+            self.fcs.append(nn.Conv2d(in_ch, out_ch, kernel_size=1, stride=1, padding=0, bias=bias))
+        self.c5x5 = nn.Conv2d(in_ch, out_ch, kernel_size=5, stride=1, padding=5 // 2, groups=out_ch // 4, bias=bias)
+        self.c7x7 = nn.Conv2d(in_ch, out_ch, kernel_size=7, stride=1, padding=7 // 2, groups=out_ch // 2, bias=bias)
+        self.c9x9 = nn.Conv2d(in_ch, out_ch, kernel_size=9, stride=1, padding=9 // 2, groups=out_ch, bias=bias)
 
-        self.fuse1 = Weight_fuse(out_dim)
-        self.fuse2 = Weight_fuse(out_dim)
-        self.fuse3 = Weight_fuse(out_dim)
+        self.fuse1 = Weight_fuse(out_ch)
+        self.fuse2 = Weight_fuse(out_ch)
+        self.fuse3 = Weight_fuse(out_ch)
 
-        self.conv = nn.Conv2d(out_dim, out_dim, 1, 1, bias=True)
+        self.conv = nn.Conv2d(out_ch, out_ch, 1, 1, bias=True)
 
     def forward(self, x):
         x = self.norm(x)
         f_in=[]
         for fc in self.fcs:
             f_in.append(fc(x))
-        cos= self.f5(f_in[3] * torch.cos(f_in[4]))
-        sin = self.f7(f_in[5] * torch.sin(f_in[6]))
-        tanh = self.f9(f_in[7] * torch.tanh(f_in[8]))
+        cos= self.c5x5(f_in[3] * torch.cos(f_in[4]))
+        sin = self.c7x7(f_in[5] * torch.sin(f_in[6]))
+        tanh = self.c9x9(f_in[7] * torch.tanh(f_in[8]))
         f_cos=self.fuse1([f_in[0], cos])
         f_sin = self.fuse2([f_in[1], sin])
         f_tanh = self.fuse3([f_in[2], tanh])
@@ -69,12 +69,12 @@ class SignlRep(nn.Module):
         return x
 
 class Mlp(nn.Module):
-    def __init__(self, in_ch, hidden_ch, out_ch, act_layer=nn.PReLU):
+    def __init__(self, in_ch, mid_ch, out_ch, act_layer=nn.PReLU):
         super().__init__()
 
         self.act = act_layer()
-        self.fc1 = nn.Conv2d(in_ch, hidden_ch, 1, 1)
-        self.fc2 = nn.Conv2d(hidden_ch, out_ch, 1, 1)
+        self.fc1 = nn.Conv2d(in_ch, mid_ch, 1, 1)
+        self.fc2 = nn.Conv2d(mid_ch, out_ch, 1, 1)
 
     def forward(self, x):
         x = self.fc1(x)
