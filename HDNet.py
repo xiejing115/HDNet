@@ -9,15 +9,15 @@ import torch.nn.functional as F
 class PAM(nn.Module):
 
     def __init__(self, ch=16, bias=False
-                , act_layer=nn.PReLU, norm_layer=nn.InstanceNorm2d):
+                , act_layer=nn.PReLU):
         super().__init__()
-        self.signlRep = SignlRep(ch, ch, bias=bias, norm=norm_layer)
-        self.norm = nn.InstanceNorm2d(ch, affine=True)
+        self.instancenorm = nn.InstanceNorm2d(ch, affine=True)
+        self.signlRep = SignlRep(ch, ch, bias=bias)
         self.mlp = Mlp(in_ch=ch, mid_ch=int(ch * 2),out_ch=ch, act_layer=act_layer)
 
     def forward(self, x):
-        x = x + self.signlRep(x)
-        x = x + self.mlp(self.norm(x))
+        x = x + self.signlRep(self.instancenorm(x))
+        x = x + self.mlp(self.instancenorm(x))
         return x
 
 class Weight_fuse(nn.Module):
@@ -37,9 +37,8 @@ class Weight_fuse(nn.Module):
 
 
 class SignlRep(nn.Module):
-    def __init__(self, in_ch, out_ch, bias=False, norm=nn.InstanceNorm2d):
+    def __init__(self, in_ch, out_ch, bias=False):
         super().__init__()
-        self.norm = norm(in_ch,affine=True)
         self.fcs = nn.ModuleList([])
         for i in range(9):
             self.fcs.append(nn.Conv2d(in_ch, out_ch, kernel_size=1, stride=1, padding=0, bias=bias))
@@ -54,7 +53,6 @@ class SignlRep(nn.Module):
         self.conv = nn.Conv2d(out_ch, out_ch, 1, 1, bias=True)
 
     def forward(self, x):
-        x = self.norm(x)
         f_in=[]
         for fc in self.fcs:
             f_in.append(fc(x))
@@ -233,7 +231,7 @@ if __name__ == '__main__':
     x = torch.ones([1, 3, H, W]).cuda()
 
     b_1, b_stagehead = model(x)
-    steps = 50
+    steps = 25
     # print(b)
     time_avgs = []
     with torch.no_grad():
