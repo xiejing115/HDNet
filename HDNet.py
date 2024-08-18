@@ -11,13 +11,14 @@ class PAM(nn.Module):
     def __init__(self, ch=16, bias=False
                 , act_layer=nn.PReLU):
         super().__init__()
-        self.instancenorm = nn.InstanceNorm2d(ch, affine=True)
+        self.instancenorm1 = nn.InstanceNorm2d(ch, affine=True)
+        self.instancenorm2 = nn.InstanceNorm2d(ch, affine=True)
         self.signlRep = SignlRep(ch, ch, bias=bias)
         self.mlp = Mlp(in_ch=ch, mid_ch=int(ch * 2),out_ch=ch, act_layer=act_layer)
 
     def forward(self, x):
-        x = x + self.signlRep(self.instancenorm(x))
-        x = x + self.mlp(self.instancenorm(x))
+        x = x + self.signlRep(self.instancenorm1(x))
+        x = x + self.mlp(self.instancenorm2(x))
         return x
 
 class Weight_fuse(nn.Module):
