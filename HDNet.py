@@ -119,6 +119,44 @@ class CAM(nn.Module):
         rbg = torch.cat((out_r, out_g, out_b, base), dim=1)
 
         return rbg
+
+class CAM_2(nn.Module):
+    def __init__(self, in_channels, channels):
+        super(CAM_2, self).__init__()
+
+        self.in_r = nn.Conv2d(in_channels // 4, channels // 2, kernel_size=1, stride=1, padding=0, bias=False)
+        self.in_g = nn.Conv2d(in_channels // 4, channels // 2, kernel_size=1, stride=1, padding=0, bias=False)
+        self.in_b = nn.Conv2d(in_channels // 4, channels // 2, kernel_size=1, stride=1, padding=0, bias=False)
+        self.norm_r = nn.InstanceNorm2d(channels // 2, affine=True)
+        self.norm_g = nn.InstanceNorm2d(channels // 2, affine=True)
+        self.norm_b = nn.InstanceNorm2d(channels // 2, affine=True)
+
+        self.out_r = nn.Conv2d(channels // 2, in_channels // 4, kernel_size=1, stride=1, padding=0, bias=False)
+        self.out_g = nn.Conv2d(channels // 2, in_channels // 4, kernel_size=1, stride=1, padding=0, bias=False)
+        self.out_b = nn.Conv2d(channels // 2, in_channels // 4, kernel_size=1, stride=1, padding=0, bias=False)
+
+
+
+    def forward(self, x):
+        x1, x2, x3, x4 = torch.chunk(x, 4, dim=1)
+
+        x_1 = self.in_r(x1)
+        x_2 = self.in_g(x2)
+        x_3 = self.in_b(x3)
+
+        norm_r = self.norm_r(x_1)
+        norm_g = self.norm_g(x_2)
+        norm_b = self.norm_b(x_3)
+
+        out_r = self.out_r(norm_r)
+        out_g = self.out_g(norm_g)
+        out_b = self.out_b(norm_b)
+
+        base= out_r + out_g + out_b + x4
+
+        rbg = torch.cat((out_r, out_g, out_b, base), dim=1)
+
+        return rbg
     
 class DRB(nn.Module):
     def __init__(self, in_channels):
@@ -167,6 +205,9 @@ class DRB(nn.Module):
         out = out4 + identity
 
         return out
+
+
+
 class HDNet(nn.Module):
     def __init__(self, in_nc=3, out_nc=3, channel=16):
         super(HDNet, self).__init__()
@@ -174,8 +215,8 @@ class HDNet(nn.Module):
         self.channel = channel
         self.out_nc = out_nc
         self.cam1 = CAM(channel, channel * 2)  
-        self.cam2 = CAM(channel, channel * 2) 
-        self.pam = nn.Sequential(PAM(channel))   
+        self.cam2 = CAM_2(channel, channel * 2)
+        self.pam = nn.Sequential(PAM(channel))
 
         self.conv1 = nn.Conv2d(in_nc, channel, 1, 1, bias=True)
         self.conv2 = nn.Conv2d(channel, channel, 1, 1, bias=True)
@@ -190,7 +231,7 @@ class HDNet(nn.Module):
         out = self.conv1(x)  # 先将3通道扩张成
         cam1 = self.cam1(out)
 
-        fuse_1 = self.fuse1(cam1)
+        fuse_1 = self.fuse2(cam1)
 
         pam = self.pam(fuse_1)
 
@@ -199,7 +240,7 @@ class HDNet(nn.Module):
 
         mid_out = self.conv4(mid)
 
-        fuse2=self.fuse2(mid) 
+        fuse2=self.fuse1(mid)
 
         cam2 = self.cam2(fuse2)
 
